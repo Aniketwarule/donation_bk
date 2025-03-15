@@ -8,6 +8,7 @@ import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 import { dirname, join } from "path";
+import genaiRoute from './genai.js';
 
 // Create __dirname equivalent for ES modules
 const __filename = fileURLToPath(import.meta.url);
@@ -21,6 +22,7 @@ sgMail.setApiKey(process.env.SENDGRID_API_KEY);
 const app = express();
 app.use(express.json());
 app.use(cors({ origin: "http://localhost:3000", credentials: true }));
+app.use('genai',genaiRoute)
 
 const otpStorage = {};
 
