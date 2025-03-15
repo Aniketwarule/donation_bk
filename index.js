@@ -21,8 +21,8 @@ sgMail.setApiKey(process.env.SENDGRID_API_KEY);
 
 const app = express();
 app.use(express.json());
-app.use(cors({ origin: "http://localhost:3000", credentials: true }));
-app.use('genai',genaiRoute)
+app.use(cors());
+app.use('/genai', genaiRoute)
 
 const otpStorage = {};
 

@@ -12,9 +12,9 @@ dotenv.config();
 const genAI = new GoogleGenerativeAI('AIzaSyBzRisNmv2lm0nw1fj4Kml_t-2V_KIQtn0');
 
 // Basic route
-// router.get('/', (req, res) => {
-//     res.send('Hello World!');
-// });
+router.get('/', (req, res) => {
+    res.send('Hello World!');
+});
 
 // Endpoint to generate text using Gemini AI
 router.post('/generate', async (req, res) => {
