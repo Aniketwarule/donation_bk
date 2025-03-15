@@ -3,6 +3,15 @@ import dotenv from "dotenv";
 import cors from "cors";
 import sgMail from "@sendgrid/mail";
 import { PrismaClient } from "@prisma/client";
+import multer from "multer";
+import fs from "fs";
+import path from "path";
+import { fileURLToPath } from "url";
+import { dirname, join } from "path";
+
+// Create __dirname equivalent for ES modules
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 const prisma = new PrismaClient();
 
@@ -57,26 +66,109 @@ app.post("/verify-otp", (req, res) => {
   res.json({ success: false, message: "Invalid OTP" });
 });
 
-import multer from "multer";
-const upload = multer({ dest: "uploads/" });
+// Configure multer storage
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    const uploadDir = join(__dirname, 'uploads');
+    
+    // Create the uploads directory if it doesn't exist
+    if (!fs.existsSync(uploadDir)) {
+      fs.mkdirSync(uploadDir, { recursive: true });
+    }
+    
+    cb(null, uploadDir);
+  },
+  filename: (req, file, cb) => {
+    // Create a unique filename with original extension
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    const ext = path.extname(file.originalname);
+    cb(null, file.fieldname + '-' + uniqueSuffix + ext);
+  }
+});
 
-app.post("/create-campaign", upload.single("imageUrl"), async (req, res, next) => {
+// Configure multer upload
+const upload = multer({ 
+  storage,
+  limits: { fileSize: 10 * 1024 * 1024 } // 10MB file size limit
+});
+
+// Define the route for creating a campaign with multiple file uploads
+app.post("/create-campaign", upload.fields([
+  { name: 'imageUrl', maxCount: 1 },
+  { name: 'certificateFile', maxCount: 1 },
+  { name: 'supportingDocFile', maxCount: 1 }
+]), async (req, res) => {
   try {
-    const { title, description, goal, milestones, imageUrl } = req.body.data1;
+    // Get form data
+    const { 
+      title, 
+      description, 
+      goal, 
+      daysLeft,
+      ngoRegistrationNumber,
+      contactName,
+      contactEmail,
+      contactPhone,
+      walletaddress,
+      imageUrlLink, // URL alternative if no file upload
+      milestones 
+    } = req.body;
+    
+    // Handle file paths
+    let imageUrl = null;
+    let certificateUrl = null;
+    let supportingDocUrl = null;
+    
+    // Process uploaded files if they exist
+    if (req.files) {
+      if (req.files.imageUrl && req.files.imageUrl[0]) {
+        imageUrl = `/uploads/${req.files.imageUrl[0].filename}`;
+      } else if (imageUrlLink) {
+        imageUrl = imageUrlLink;
+      }
+      
+      if (req.files.certificateFile && req.files.certificateFile[0]) {
+        certificateUrl = `/uploads/${req.files.certificateFile[0].filename}`;
+        console.log(certificateUrl)
+      }
+      
+      if (req.files.supportingDocFile && req.files.supportingDocFile[0]) {
+        supportingDocUrl = `/uploads/${req.files.supportingDocFile[0].filename}`;
+        console.log(supportingDocUrl)
+      }
+    }
+    
+    // Create campaign in database
     const campaign = await prisma.campaign.create({
       data: {
         title,
+        walletaddress,
         description,
         imageUrl,
         raised: "0",
         goal,
-        daysLeft: 30,
+        daysLeft: parseInt(daysLeft) || 30,
+        ngoRegistrationNumber,
+        contactName,
+        contactEmail,
+        contactPhone,
+        certificateUrl,
+        supportingDocUrl
       },
     });
-
-    if (milestones.length > 0) {
+    
+    // Parse and create milestones if provided
+    let parsedMilestones;
+    try {
+      parsedMilestones = JSON.parse(milestones);
+    } catch (error) {
+      parsedMilestones = [];
+      console.error("Error parsing milestones:", error);
+    }
+    
+    if (parsedMilestones && parsedMilestones.length > 0) {
       await prisma.milestone.createMany({
-        data: milestones.map((milestone) => ({
+        data: parsedMilestones.map((milestone) => ({
           title: milestone.title,
           amount: milestone.amount,
           status: milestone.status || "pending", // Default status if missing
@@ -84,14 +176,20 @@ app.post("/create-campaign", upload.single("imageUrl"), async (req, res, next) =
         })),
       });
     }
-
-    res.json({ success: true, message: "Campaign created successfully with ID: " + campaign.id });
+    
+    res.json({ 
+      success: true, 
+      message: "Campaign created successfully with ID: " + campaign.id,
+      campaignId: campaign.id
+    });
   } catch (error) {
     console.error("Error:", error);
     res.status(500).json({ success: false, message: "Internal server error" });
   }
 });
 
+// Serve uploaded files statically
+app.use('/uploads', express.static(join(__dirname, 'uploads')));
 
 app.get('/campaigns', async (req, res) => {
   const result = await prisma.campaign.findMany({});
@@ -114,5 +212,7 @@ app.get('/campaigns/:id', async (req, res) => {
   res.json(result);
 });
 
-
 app.listen(5000, () => console.log("Server running on port 5000"));
+
+// Remove the CommonJS export since we're using ES modules
+// module.exports = app;
