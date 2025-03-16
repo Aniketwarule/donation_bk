@@ -214,6 +214,30 @@ app.get('/campaigns/:id', async (req, res) => {
   res.json(result);
 });
 
+app.post('/campaigns/:id/updateRaised', async (req, res) => {
+  const { id } = req.params;
+  const { amount } = req.body;
+
+
+  const campaign = await prisma.campaign.findUnique({
+    where: {
+      id,
+    },
+  });
+  const finalAns = parseFloat(campaign.raised) + parseFloat(amount)
+  const cam = await prisma.campaign.update({
+    where: {
+      id,
+    },
+    data: {
+      // add raised amount to the campaign
+      raised: finalAns.toString(),
+    },
+  });
+  
+  res.json(cam);
+});
+
 app.listen(5000, () => console.log("Server running on port 5000"));
 
 // Remove the CommonJS export since we're using ES modules
