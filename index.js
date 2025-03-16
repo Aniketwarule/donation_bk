@@ -8,6 +8,7 @@ import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 import { dirname, join } from "path";
+import genaiRoute from './genai.js';
 
 // Create __dirname equivalent for ES modules
 const __filename = fileURLToPath(import.meta.url);
@@ -20,7 +21,8 @@ sgMail.setApiKey(process.env.SENDGRID_API_KEY);
 
 const app = express();
 app.use(express.json());
-app.use(cors({ origin: "http://localhost:3000", credentials: true }));
+app.use(cors());
+app.use('/genai', genaiRoute)
 
 const otpStorage = {};
 
@@ -210,6 +212,30 @@ app.get('/campaigns/:id', async (req, res) => {
     },
   });
   res.json(result);
+});
+
+app.post('/campaigns/:id/updateRaised', async (req, res) => {
+  const { id } = req.params;
+  const { amount } = req.body;
+
+
+  const campaign = await prisma.campaign.findUnique({
+    where: {
+      id,
+    },
+  });
+  const finalAns = parseFloat(campaign.raised) + parseFloat(amount)
+  const cam = await prisma.campaign.update({
+    where: {
+      id,
+    },
+    data: {
+      // add raised amount to the campaign
+      raised: finalAns.toString(),
+    },
+  });
+  
+  res.json(cam);
 });
 
 app.listen(5000, () => console.log("Server running on port 5000"));
